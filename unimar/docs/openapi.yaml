@@ -1,0 +1,931 @@
+openapi: 3.0.3
+info:
+  title: Catálogo de Productos API
+  description: >
+    API para gestión de catálogo de productos: autenticación JWT, CRUD de
+    productos/categorías, búsqueda con filtros dinámicos y carga masiva de
+    Excel con área de staging editable antes de confirmar.
+    Ver docs/spec.md para el detalle de negocio y docs/signalr-events.md
+    para el contrato de eventos en tiempo real.
+  version: 0.1.0
+servers:
+  - url: /api
+    description: API base path (host según entorno)
+
+tags:
+  - name: Auth
+  - name: Productos
+  - name: Categorias
+  - name: Files
+  - name: Staging
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------------
+  # AUTH
+  # ---------------------------------------------------------------------
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renovar access token usando un refresh token vigente
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Tokens renovados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Refresh token inválido, expirado o revocado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revocar el refresh token activo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '204':
+          description: Sesión cerrada
+
+  # ---------------------------------------------------------------------
+  # PRODUCTOS
+  # ---------------------------------------------------------------------
+  /productos:
+    get:
+      tags: [Productos]
+      summary: Listar productos (paginado simple, sin filtros dinámicos)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de productos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProductoResult'
+    post:
+      tags: [Productos]
+      summary: Crear producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoInput'
+      responses:
+        '201':
+          description: Producto creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Ya existe un producto con ese SKU
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /productos/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProductoId'
+    get:
+      tags: [Productos]
+      summary: Obtener producto por id
+      responses:
+        '200':
+          description: Producto encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Productos]
+      summary: Actualizar producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoInput'
+      responses:
+        '200':
+          description: Producto actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Productos]
+      summary: Eliminar producto
+      responses:
+        '204':
+          description: Producto eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /productos/search:
+    post:
+      tags: [Productos]
+      summary: Búsqueda con filtros dinámicos combinables
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoSearchRequest'
+      responses:
+        '200':
+          description: Resultado de búsqueda paginado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProductoResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  # ---------------------------------------------------------------------
+  # CATEGORIAS
+  # ---------------------------------------------------------------------
+  /categorias:
+    get:
+      tags: [Categorias]
+      summary: Listar categorías
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de categorías
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCategoriaResult'
+    post:
+      tags: [Categorias]
+      summary: Crear categoría
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoriaInput'
+      responses:
+        '201':
+          description: Categoría creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /categorias/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CategoriaId'
+    get:
+      tags: [Categorias]
+      summary: Obtener categoría por id
+      responses:
+        '200':
+          description: Categoría encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Categorias]
+      summary: Actualizar categoría
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoriaInput'
+      responses:
+        '200':
+          description: Categoría actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Categorias]
+      summary: Eliminar categoría
+      responses:
+        '204':
+          description: Categoría eliminada
+        '409':
+          description: La categoría tiene productos asociados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------
+  # FILES (carga masiva)
+  # ---------------------------------------------------------------------
+  /files/upload:
+    post:
+      tags: [Files]
+      summary: Subir un Excel para procesamiento masivo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archivo]
+              properties:
+                archivo:
+                  type: string
+                  format: binary
+      responses:
+        '202':
+          description: Archivo aceptado y encolado para procesamiento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUpload'
+        '400':
+          description: Archivo inválido (formato, vacío, excede tamaño máximo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /files:
+    get:
+      tags: [Files]
+      summary: Listar cargas del usuario autenticado (Admin ve todas)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/FileStatus'
+      responses:
+        '200':
+          description: Página de cargas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedFileResult'
+
+  /files/{id}:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Files]
+      summary: Obtener estado actual de una carga
+      responses:
+        '200':
+          description: Carga encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUpload'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Files]
+      summary: Descartar una carga no confirmada (limpia su staging)
+      responses:
+        '204':
+          description: Carga descartada
+        '409':
+          description: La carga ya fue confirmada y no puede descartarse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /files/{id}/errors:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Files]
+      summary: Listar errores de procesamiento de una carga
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de errores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedFileProcessingLogResult'
+
+  /files/{id}/commit:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    post:
+      tags: [Files]
+      summary: Confirmar la carga (mueve staging válido a Producto)
+      responses:
+        '200':
+          description: Carga confirmada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileCommitResult'
+        '409':
+          description: >
+            La carga no está en un estado confirmable (p.ej. aún
+            Procesando, o ya fue confirmada/descartada previamente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------
+  # STAGING (pre-commit)
+  # ---------------------------------------------------------------------
+  /files/{id}/staging:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Staging]
+      summary: Listar filas de staging de una carga
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: soloConError
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Página de filas de staging
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProductoStagingResult'
+    post:
+      tags: [Staging]
+      summary: Agregar una fila manual al staging
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoStagingInput'
+      responses:
+        '201':
+          description: Fila agregada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoStaging'
+
+  /files/{id}/staging/{stagingId}:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+      - $ref: '#/components/parameters/StagingId'
+    put:
+      tags: [Staging]
+      summary: Editar una fila de staging
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoStagingInput'
+      responses:
+        '200':
+          description: Fila actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoStaging'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Staging]
+      summary: Eliminar una fila de staging
+      responses:
+        '204':
+          description: Fila eliminada
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+    ProductoId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CategoriaId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    FileId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StagingId:
+      name: stagingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblemDetails'
+
+  schemas:
+    # --- Auth ---
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresAtUtc:
+          type: string
+          format: date-time
+        usuario:
+          $ref: '#/components/schemas/UsuarioResumen'
+
+    UsuarioResumen:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [Admin, Usuario]
+
+    # --- Productos ---
+    Categoria:
+      type: object
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        activa:
+          type: boolean
+
+    CategoriaInput:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 150
+        descripcion:
+          type: string
+          nullable: true
+          maxLength: 500
+        activa:
+          type: boolean
+          default: true
+
+    Producto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        precio:
+          type: number
+          format: decimal
+        stock:
+          type: integer
+        categoriaId:
+          type: integer
+        categoria:
+          $ref: '#/components/schemas/Categoria'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductoInput:
+      type: object
+      required: [sku, nombre, precio, stock, categoriaId]
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        descripcion:
+          type: string
+          nullable: true
+          maxLength: 1000
+        precio:
+          type: number
+          format: decimal
+          minimum: 0
+        stock:
+          type: integer
+          minimum: 0
+        categoriaId:
+          type: integer
+
+    ProductoFiltro:
+      type: object
+      required: [campo, operador, valor]
+      properties:
+        campo:
+          type: string
+          enum: [sku, nombre, categoriaId, precio, stock, createdAt]
+        operador:
+          type: string
+          enum: [eq, contains, gte, lte, between]
+        valor:
+          description: Valor a comparar. Tipo según `campo` (string, number o date).
+          oneOf:
+            - type: string
+            - type: number
+        valorHasta:
+          description: Solo requerido cuando `operador` es `between`.
+          type: [string, number]
+          nullable: true
+
+    ProductoSearchRequest:
+      type: object
+      properties:
+        filtros:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoFiltro'
+        ordenarPor:
+          type: string
+          enum: [sku, nombre, precio, stock, createdAt]
+          default: nombre
+        ordenDescendente:
+          type: boolean
+          default: false
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+
+    PagedProductoResult:
+      allOf:
+        - $ref: '#/components/schemas/PagedResultBase'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Producto'
+
+    PagedCategoriaResult:
+      allOf:
+        - $ref: '#/components/schemas/PagedResultBase'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Categoria'
+
+    PagedResultBase:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+
+    # --- Files / Staging ---
+    FileStatus:
+      type: string
+      enum: [Pendiente, Procesando, Completado, Fallido, Parcial]
+
+    FileUpload:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombreArchivo:
+          type: string
+        status:
+          $ref: '#/components/schemas/FileStatus'
+        totalFilas:
+          type: integer
+          nullable: true
+        filasProcesadas:
+          type: integer
+        filasConError:
+          type: integer
+        usuarioId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PagedFileResult:
+      allOf:
+        - $ref: '#/components/schemas/PagedResultBase'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FileUpload'
+
+    FileProcessingLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fila:
+          type: integer
+        columna:
+          type: string
+          nullable: true
+        mensaje:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedFileProcessingLogResult:
+      allOf:
+        - $ref: '#/components/schemas/PagedResultBase'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FileProcessingLogEntry'
+
+    FileCommitResult:
+      type: object
+      properties:
+        fileId:
+          type: string
+          format: uuid
+        productosCreados:
+          type: integer
+        productosActualizados:
+          type: integer
+        filasExcluidasPorError:
+          type: integer
+        status:
+          $ref: '#/components/schemas/FileStatus'
+
+    ProductoStaging:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileId:
+          type: string
+          format: uuid
+        filaOriginal:
+          type: integer
+          nullable: true
+          description: Null cuando la fila fue agregada manualmente (esManual = true).
+        sku:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        precio:
+          type: number
+          format: decimal
+        stock:
+          type: integer
+        categoriaNombre:
+          type: string
+        tieneError:
+          type: boolean
+        esManual:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductoStagingInput:
+      type: object
+      required: [sku, nombre, precio, stock, categoriaNombre]
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        descripcion:
+          type: string
+          nullable: true
+          maxLength: 1000
+        precio:
+          type: number
+          format: decimal
+          minimum: 0
+        stock:
+          type: integer
+          minimum: 0
+        categoriaNombre:
+          type: string
+          description: Se resuelve/crea la Categoria por nombre al momento del commit.
+
+    PagedProductoStagingResult:
+      allOf:
+        - $ref: '#/components/schemas/PagedResultBase'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductoStaging'
+
+    # --- Errores ---
+    ProblemDetails:
+      type: object
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+          nullable: true
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
