@@ -1,0 +1,6 @@
+@TicketPe.Api_HostAddress = http://localhost:5278
+
+GET {{TicketPe.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

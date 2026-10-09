@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ticketpe-postgres
+    environment:
+      POSTGRES_USER: ticketpe
+      POSTGRES_PASSWORD: ticketpe_dev_2026
+      POSTGRES_DB: ticketpe
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketpe -d ticketpe"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ticketpe-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    container_name: ticketpe-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ticketpe
+      MONGO_INITDB_ROOT_PASSWORD: ticketpe_dev_2026
+      MONGO_INITDB_DATABASE: ticketpe_catalog
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ticketpe-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ticketpe
+      RABBITMQ_DEFAULT_PASS: ticketpe_dev_2026
+    ports:
+      - "5672:5672"      # protocolo AMQP (lo usa tu código)
+      - "15672:15672"    # panel web de administración
+    volumes:
+      - rabbit_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongo_data:
+  rabbit_data:
